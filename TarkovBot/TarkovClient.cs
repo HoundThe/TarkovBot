@@ -40,7 +40,7 @@ namespace TarkovBot
 
             byte[] data = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
 
-            if((int)response.StatusCode != 200)
+            if ((int)response.StatusCode != 200)
                 Console.WriteLine("Status code: " + (int)response.StatusCode);
 
             var decodedData = await DeflateResponse(data);
@@ -50,19 +50,10 @@ namespace TarkovBot
             else
                 return JsonConvert.DeserializeObject<T>(decodedData);
         }
-        public async Task<Datum> Auth()
+
+        public async Task<PlayerData> Auth()
         {
-            var profile = await PostJson<Profile>(PROD_ENDPOINT + "/client/game/profile/list", "");
-            var playerData = profile.data?.FirstOrDefault(x => x.Info.Side != "Savage");
-
-            if (playerData == null)
-            {
-                Console.WriteLine("Player data not found");
-                return null;
-            }
-
-            Console.WriteLine("Level: " + playerData.Info.Level);
-
+            var playerData = await RefreshProfile();
             await PostJson<string>(PROD_ENDPOINT + "/client/game/profile/select", $" {{ \"uid\":  \"{playerData._id}\" }}");
 
             return playerData;
@@ -84,16 +75,56 @@ namespace TarkovBot
         {
             while (true)
             {
-                Console.WriteLine("Heartbeat");
+                Logger.Log("Heartbeat", LoggingLevel.Verbose);
                 await PostJson<string>(PROD_ENDPOINT + "/client/game/keepalive", "");
                 await Task.Delay(25000);
             }
         }
-        public async Task<Price> GetItemPrice(string id)
+        public async Task<PlayerData> RefreshProfile()
         {
-            var body = new GetPriceRequest { templateId = id };
-            return await PostJson<Price>($"{RAGFAIR_ENDPOINT}/client/ragfair/itemMarketPrice", JsonConvert.SerializeObject(body));
+            var profile = await PostJson<Profile>(PROD_ENDPOINT + "/client/game/profile/list", "");
+            var playerData = profile.data?.FirstOrDefault(x => x.Info.Side != "Savage");
+
+            if (playerData == null)
+            {
+                Logger.Log("[REFRESH] Player data not found, authentication failed, invalid session?", LoggingLevel.Low);
+                return null;
+            }
+
+            return playerData;
         }
+
+        public async Task<SearchResponse> SearchFleaMarket(string itemId)
+        {
+            var request = new FleaRequest
+            {
+                page = 0,
+                limit = 15,
+                sortType = SortBy.Price,
+                sortDirection = SortDirection.Ascending,
+                currency = Currency.Rouble,
+                priceFrom = 0,
+                priceTo = 0,
+                quantityFrom = 0,
+                quantityTo = 0,
+                conditionFrom = 0,
+                conditionTo = 0,
+                oneHourExpiration = false,
+                removeBartering = true,
+                offerOwnerType = Owner.Player,
+                onlyFunctional = true,
+                updateOfferCount = true,
+                handbookId = itemId,
+                linkedSearchId = "",
+                neededSearchId = "",
+                tm = 1,
+
+            };
+
+            return await PostJson<SearchResponse>($"{TarkovHttpClient.RAGFAIR_ENDPOINT}/client/ragfair/find", JsonConvert.SerializeObject(request));
+
+        }
+
 
         public async Task<BuyStatus> BuyItem(string offerId, ulong quantity, List<BarterItem> items)
         {
@@ -116,44 +147,49 @@ namespace TarkovBot
                 },
                 tm = 2
             };
-            var response = await PostJson<BuyItemResponse>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
-            return HandleBuyErrors(response);
+            // gotta parse it myself because the api is inconsistent
+            var stringResponse = await PostJson<string>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
+            return HandleBuyErrors(stringResponse);
 
         }
 
-        private BuyStatus HandleBuyErrors(BuyItemResponse response)
+        private BuyStatus HandleBuyErrors(string response)
         {
-            if (response.errmsg != null)
+            if (!response.Contains("\"err\":0"))
             {
-                Logger.Log(response.errmsg, LoggingLevel.Verbose);
+                if (response.Contains("has count"))
+                    return BuyStatus.NotEnoughMoney;
+
                 return BuyStatus.OtherError;
             }
+
+
             else
             {
-                if (response.data.badRequest.Count != 0)
+                var parsedResponse = JsonConvert.DeserializeObject<BuyItemResponse>(response);
+
+                if (parsedResponse.data.badRequest.Count != 0)
                 {
-                    var errorMessage = response.data.badRequest.First().errmsg;
-                    Logger.Log(errorMessage, LoggingLevel.Verbose);
+                    var errorMessage = parsedResponse.data.badRequest.First().errmsg;
+                    Logger.Log($"[BUY]: {errorMessage}", LoggingLevel.Verbose);
                     if (errorMessage.Contains("not found"))
                         return BuyStatus.OfferNotFound;
                     if (errorMessage.Contains("place"))
                         return BuyStatus.InventoryFull;
                     if (errorMessage.Contains("locked"))
                         return BuyStatus.ProfileLocked;
-                    if (errorMessage.Contains("has count"))
-                        return BuyStatus.NotEnoughMoney;
 
                     return BuyStatus.OtherError;
                 }
                 else
                 {
-                    Logger.Log("Successful buy", LoggingLevel.Verbose);
+                    Logger.Log("[BUY] Success", LoggingLevel.Verbose);
                     return BuyStatus.Success;
                 }
             }
         }
 
-        public async Task SellItem(List<string> items, bool sellAll, Requirement requirement)
+        public async Task<SellStatus> SellItem(List<string> items, bool sellAll, Requirement requirement)
         {
             var body = new SellFleaItemRequest
             {
@@ -178,8 +214,18 @@ namespace TarkovBot
                 },
                 tm = 2
             };
-            string response = await PostJson<string>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
-            Logger.Log($"Sell:\n {response}", LoggingLevel.Verbose);
+            var response = await PostJson<SellResponse>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
+            if (response.err != 0)
+            {
+                Logger.Log($"[SELL] error {response.errmsg}", LoggingLevel.Verbose);
+                if (response.errmsg.Contains("max offer"))
+                    return SellStatus.NoAvailableOffer;
+                return SellStatus.OtherErr;
+            }
+            else {
+                Logger.Log($"[SELL]:\n {response.data.ToString()}", LoggingLevel.Verbose);
+                return SellStatus.Success;
+            }
         }
-    }    
+    }
 }

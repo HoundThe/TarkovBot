@@ -128,16 +128,6 @@ namespace TarkovBot
         public ResponseData data { get; set; }
     }
 
-    public enum BuyStatus
-    {
-        Success,
-        OfferNotFound,
-        InventoryFull,
-        ProfileLocked,
-        NotEnoughMoney,
-        OtherError
-    }
-
     public class ResponseData
     {
         public List<BadRequest> badRequest { get; set; }
@@ -202,5 +192,37 @@ namespace TarkovBot
         public bool onlyFunctional { get; set; }
     }
 
+    public class Data
+    {
+        public Object items { get; set; }
+        public List<string> badRequest { get; set; }
+        public List<object> quests { get; set; }
+        public List<Offer> ragFairOffers { get; set; }
+        public List<object> builds { get; set; }
+    }
+
+    public class SellResponse
+    {
+        public int err { get; set; }
+        public string errmsg { get; set; }
+        public Object data { get; set; }
+    }
+
+    public enum BuyStatus
+    {
+        Success,
+        OfferNotFound,
+        InventoryFull,
+        ProfileLocked,
+        NotEnoughMoney,
+        OtherError
+    }
+
+    public enum SellStatus
+    {
+        Success,
+        NoAvailableOffer,
+        OtherErr
+    }
 
 }

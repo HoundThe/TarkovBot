@@ -53,81 +53,49 @@ namespace TarkovBot
         public int Maximum { get; set; }
     }
 
-    public class Health2
+    public class Health
     {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
+        public double Current { get; set; }
+        public double Maximum { get; set; }
     }
 
     public class Head
     {
-        public Health2 Health { get; set; }
-    }
-
-    public class Health3
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
+        public Health Health { get; set; }
     }
 
     public class Chest
     {
-        public Health3 Health { get; set; }
-    }
-
-    public class Health4
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
+        public Health Health { get; set; }
     }
 
     public class Stomach
     {
-        public Health4 Health { get; set; }
+        public Health Health { get; set; }
     }
 
-    public class Health5
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
-    }
 
     public class LeftArm
     {
-        public Health5 Health { get; set; }
-    }
-
-    public class Health6
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
+        public Health Health { get; set; }
     }
 
     public class RightArm
     {
-        public Health6 Health { get; set; }
+        public Health Health { get; set; }
     }
 
-    public class Health7
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
-    }
 
     public class LeftLeg
     {
-        public Health7 Health { get; set; }
+        public Health Health { get; set; }
     }
 
-    public class Health8
-    {
-        public int Current { get; set; }
-        public int Maximum { get; set; }
-    }
+
 
     public class RightLeg
     {
-        public Health8 Health { get; set; }
+        public Health Health { get; set; }
     }
 
     public class BodyParts
@@ -141,7 +109,7 @@ namespace TarkovBot
         public RightLeg RightLeg { get; set; }
     }
 
-    public class Health
+    public class HealthStatus
     {
         public Hydration Hydration { get; set; }
         public Energy Energy { get; set; }
@@ -299,7 +267,7 @@ namespace TarkovBot
         public List<object> offers { get; set; }
     }
 
-    public class Datum
+    public class PlayerData
     {
         public string _id { get; set; }
         public int aid { get; set; }
@@ -322,6 +290,6 @@ namespace TarkovBot
     {
         public int err { get; set; }
         public object errmsg { get; set; }
-        public List<Datum> data { get; set; }
+        public List<PlayerData> data { get; set; }
     }
 }

@@ -15,7 +15,7 @@ namespace TarkovBot
 
         public static void Log(string content, LoggingLevel verbosity)
         {
-            Console.WriteLine($"[{verbosity.ToString()}]: {content}");
+            Console.WriteLine($"{DateTime.UtcNow.ToLocalTime()}: [{verbosity.ToString()}]: {content}");
         }
 
         public static void Log(SearchResponse search, LoggingLevel verbosity)
