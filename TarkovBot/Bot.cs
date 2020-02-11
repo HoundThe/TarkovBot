@@ -13,7 +13,7 @@ namespace TarkovBot
     {
         private static TarkovHttpClient tarkovHttpClient;
         private Dictionary<string, string> itemsDictionary;
-        private Datum playerData;
+        private PlayerData playerData;
 
         public Bot(string session)
         {
