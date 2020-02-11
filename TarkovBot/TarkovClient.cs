@@ -159,7 +159,9 @@ namespace TarkovBot
             {
                 if (response.Contains("has count"))
                     return BuyStatus.NotEnoughMoney;
-
+                if (errorMessage.Contains("not found"))
+                    return BuyStatus.OfferNotFound;
+                        
                 return BuyStatus.OtherError;
             }
 
@@ -172,8 +174,7 @@ namespace TarkovBot
                 {
                     var errorMessage = parsedResponse.data.badRequest.First().errmsg;
                     Logger.Log($"[BUY]: {errorMessage}", LoggingLevel.Verbose);
-                    if (errorMessage.Contains("not found"))
-                        return BuyStatus.OfferNotFound;
+
                     if (errorMessage.Contains("place"))
                         return BuyStatus.InventoryFull;
                     if (errorMessage.Contains("locked"))
