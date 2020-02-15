@@ -22,7 +22,7 @@ public Bot(string session)
             };
 
             tarkovHttpClient = new TarkovHttpClient(session, handler);
-
+          
             itemsDictionary = new Dictionary<string, string>();
             itemsDictionary.Add("rouble", "5449016a4bdc2d6f028b456f");
             itemsDictionary.Add("energy_lamp", "590a3cd386f77436f20848cb");
@@ -50,7 +50,7 @@ public Bot(string session)
                 return;
             }
             // refresh inventory so you can see it
-            await tarkovHttpClient.RefreshProfile();
+            playerData = await tarkovHttpClient.RefreshProfile();
             // now to sell this type of item for the same price as bought
             var item = playerData.Inventory.items.FirstOrDefault(x => x._tpl == itemsDictionary["energy_lamp"]);
             var sellResult = await tarkovHttpClient.SellItem(new List<string> { item._id}, false, new Requirement { count = cheapestOffer.summaryCost, _tpl = itemsDictionary["rouble"] });
