@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
@@ -157,11 +157,13 @@ namespace TarkovBot
         {
             if (!response.Contains("\"err\":0"))
             {
-                if (response.Contains("has count"))
+                if (response.Contains("has count")) // not big enough money stack
                     return BuyStatus.NotEnoughMoney;
-                if (errorMessage.Contains("not found"))
+                if (response.Contains("enough money")) // not enough money to pay the tax
+                    return BuyStatus.NotEnoughMoney;
+                if (response.Contains("not found"))
                     return BuyStatus.OfferNotFound;
-                        
+
                 return BuyStatus.OtherError;
             }
 
@@ -173,8 +175,9 @@ namespace TarkovBot
                 if (parsedResponse.data.badRequest.Count != 0)
                 {
                     var errorMessage = parsedResponse.data.badRequest.First().errmsg;
-                    Logger.Log($"[BUY]: {errorMessage}", LoggingLevel.Verbose);
-
+                //    Logger.Log($"[BUY]: {errorMessage}", LoggingLevel.Verbose);
+                    if (errorMessage.Contains("not found"))
+                        return BuyStatus.OfferNotFound;
                     if (errorMessage.Contains("place"))
                         return BuyStatus.InventoryFull;
                     if (errorMessage.Contains("locked"))
