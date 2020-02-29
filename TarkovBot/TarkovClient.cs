@@ -22,7 +22,7 @@ namespace TarkovBot
         private const string BSG_LAUNCHER_VERSION = "0.9.2.970";
         private const string EFT_CLIENT_VERSION = "0.12.3.5776";
         private const string UNITY_VERSION = "2018.4.13f1";
-
+        private const int _heartbeatDelay = 25000;
         public TarkovHttpClient(string session, HttpMessageHandler handler) : base(handler)
         {
             DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -41,10 +41,24 @@ namespace TarkovBot
             byte[] data = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
 
             if ((int)response.StatusCode != 200)
+            {
                 Console.WriteLine("Status code: " + (int)response.StatusCode);
+                return default(T);
+            }
 
-            var decodedData = await DeflateResponse(data);
+            string decodedData;
 
+            try
+            {
+            decodedData = await DeflateResponse(data);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(await response.Content.ReadAsStringAsync());
+                return default(T);
+            }
+            // string type will just return the text of response
             if (typeof(T) == typeof(string))
                 return (T)(object)decodedData;
             else
@@ -55,7 +69,7 @@ namespace TarkovBot
         {
             var playerData = await RefreshProfile();
             await PostJson<string>(PROD_ENDPOINT + "/client/game/profile/select", $" {{ \"uid\":  \"{playerData._id}\" }}");
-
+            
             return playerData;
         }
 
@@ -77,12 +91,17 @@ namespace TarkovBot
             {
                 Logger.Log("Heartbeat", LoggingLevel.Verbose);
                 await PostJson<string>(PROD_ENDPOINT + "/client/game/keepalive", "");
-                await Task.Delay(25000);
+                await Task.Delay(_heartbeatDelay);
             }
         }
         public async Task<PlayerData> RefreshProfile()
         {
             var profile = await PostJson<Profile>(PROD_ENDPOINT + "/client/game/profile/list", "");
+            if (profile == default(Profile))
+            {
+                Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                return null;
+            }
             var playerData = profile.data?.FirstOrDefault(x => x.Info.Side != "Savage");
 
             if (playerData == null)
@@ -120,9 +139,14 @@ namespace TarkovBot
                 tm = 1,
 
             };
+            var response = await PostJson<SearchResponse>($"{TarkovHttpClient.RAGFAIR_ENDPOINT}/client/ragfair/find", JsonConvert.SerializeObject(request));
+            if (response == default(SearchResponse))
+            {
+                Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                return null;
+            }
 
-            return await PostJson<SearchResponse>($"{TarkovHttpClient.RAGFAIR_ENDPOINT}/client/ragfair/find", JsonConvert.SerializeObject(request));
-
+            return response;
         }
 
 
@@ -149,12 +173,19 @@ namespace TarkovBot
             };
             // gotta parse it myself because the api is inconsistent
             var stringResponse = await PostJson<string>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
+
             return HandleBuyErrors(stringResponse);
 
         }
 
         private BuyStatus HandleBuyErrors(string response)
         {
+            if (response == default(string))
+            {
+                Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                return BuyStatus.BackendError;
+            }
+
             if (!response.Contains("\"err\":0"))
             {
                 if (response.Contains("has count")) // not big enough money stack
@@ -163,7 +194,10 @@ namespace TarkovBot
                     return BuyStatus.NotEnoughMoney;
                 if (response.Contains("not found"))
                     return BuyStatus.OfferNotFound;
+                if (response.Contains("filed to lock profile"))
+                    return BuyStatus.ProfileLocked;
 
+                Console.Write("[BUY] ERROR - " + response);
                 return BuyStatus.OtherError;
             }
 
@@ -183,15 +217,114 @@ namespace TarkovBot
                     if (errorMessage.Contains("locked"))
                         return BuyStatus.ProfileLocked;
 
+                    Console.Write("[BUY] ERROR - " + response);
+
                     return BuyStatus.OtherError;
                 }
                 else
                 {
-                    Logger.Log("[BUY] Success", LoggingLevel.Verbose);
                     return BuyStatus.Success;
                 }
             }
         }
+        public async Task GetMoneyFromMessage(Inventory inventory)
+        {
+            int marketType = 4; // market
+            var response = await PostJson<MessageResponse>($"{PROD_ENDPOINT}/client/mail/dialog/list", "");
+            if (response == default(MessageResponse))
+            {
+                Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                return;
+            }
+            var x = response.data.FirstOrDefault(x => x.type == marketType);
+            if (x == null)
+                return;
+            await Task.Delay(500);
+            // get all attachments
+            var body = $"{{\"dialogId\":\"{x._id}\"}}";
+            var resp = await PostJson<AttachmentsResponse>($"{PROD_ENDPOINT}/client/mail/dialog/getAllAttachments", body);
+            if (resp == default(AttachmentsResponse))
+            {
+                Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                return;
+            }
+            foreach (var mes in resp.data.messages)
+            {
+                await Task.Delay(100);
+
+                body = $"{{" +
+              $"\"data\": [{{" +
+              $"\"Action\":\"Move\"," +
+              $"\"item\":\"{mes.items.data.First()._id}\"," +
+              $"\"to\":{{" +
+              $"\"id\":\"{inventory.stash}\"," +
+              $"\"container\":\"hideout\"" +
+              $"}}," +
+              $"\"fromOwner\":{{" +
+              $"\"id\":\"{mes._id}\"," +
+              $"\"type\":\"Mail\"" +
+              $"}}" +
+              $"}}]" +
+              $"}}";
+
+                var rp = await PostJson<Response>($"{PROD_ENDPOINT}/client/game/profile/items/moving", body);
+                if (rp == default(Response))
+                {
+                    Logger.Log("Servers are fucked again", LoggingLevel.Low);
+                    return;
+                }
+                if (response.errmsg != null)
+                {
+                    Console.WriteLine(response.errmsg);
+                    Console.WriteLine("Inventory probably full, returning");
+                    break;
+                }
+            }
+        }
+
+        public async Task StackAllCash(Inventory inventory)
+        {
+            string roubleId = "5449016a4bdc2d6f028b456f";
+
+            var cashIds = inventory.items.Where(x => x._tpl == roubleId).ToList();
+
+            Item fromItem;
+            Item toItem;
+            while (true)
+            {
+                await Task.Delay(200);
+                fromItem = cashIds.FirstOrDefault();
+                cashIds.Remove(fromItem);
+                if (fromItem == null)
+                    break;
+                toItem = cashIds.FirstOrDefault(x => x?.upd?.StackObjectsCount + fromItem.upd.StackObjectsCount < 500000);
+                if (toItem == null)
+                    continue;
+                toItem.upd.StackObjectsCount += fromItem.upd.StackObjectsCount; // update the value
+
+                // do the move
+                var body = $"{{\"data\":[{{" +
+              $"\"Action\":\"Merge\"," +
+              $"\"item\":\"{fromItem._id}\"," +
+              $"\"with\":\"{toItem._id}\"" +
+              $"}}]," +
+              $"\"tm\":2" +
+              $"}}";
+
+
+                var response = await PostJson<Response>($"{PROD_ENDPOINT}/client/game/profile/items/moving", body);
+                if (response == default(Response))
+                {
+                    return;
+                }
+                if (response.errmsg != null)
+                {
+                    Console.WriteLine(response.errmsg);
+                }
+            }
+        }
+
+
 
         public async Task<SellStatus> SellItem(List<string> items, bool sellAll, Requirement requirement)
         {
@@ -218,12 +351,18 @@ namespace TarkovBot
                 },
                 tm = 2
             };
-            var response = await PostJson<SellResponse>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
+            var response = await PostJson<Response>($"{PROD_ENDPOINT}/client/game/profile/items/moving", JsonConvert.SerializeObject(body));
+            if(response == default(Response))
+            {
+                return SellStatus.BackendError;
+            }
             if (response.err != 0)
             {
                 Logger.Log($"[SELL] error {response.errmsg}", LoggingLevel.Verbose);
                 if (response.errmsg.Contains("max offer"))
                     return SellStatus.NoAvailableOffer;
+                if (response.errmsg.Contains("pay the tax"))
+                    return SellStatus.NoMoneyForTax;
                 return SellStatus.OtherErr;
             }
             else {
