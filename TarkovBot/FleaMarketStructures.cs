@@ -1,9 +1,69 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace TarkovBot
 {
+    public class SystemData
+    {
+        public string buyerNickname { get; set; }
+        public string soldItem { get; set; }
+        public int itemCount { get; set; }
+        public string date { get; set; }
+        public string time { get; set; }
+        public string location { get; set; }
+    }
+
+    public class Items
+    {
+        public string stash { get; set; }
+        public List<Item> data { get; set; }
+    }
+
+    public class Message
+    {
+        public string _id { get; set; }
+        public string uid { get; set; }
+        public int type { get; set; }
+        public double dt { get; set; }
+        public string templateId { get; set; }
+        public SystemData systemData { get; set; }
+        public Items items { get; set; }
+        public int maxStorageTime { get; set; }
+        public bool hasRewards { get; set; }
+    }
+
+    public class AttachmentsData
+    {
+        public List<Message> messages { get; set; }
+        public List<object> profiles { get; set; }
+    }
+
+    public class AttachmentsResponse
+    {
+        public int err { get; set; }
+        public object errmsg { get; set; }
+        public AttachmentsData data { get; set; }
+    }
+
+
+    public class MessageResponseData
+    {
+        public int type { get; set; }
+        public Message message { get; set; }
+        public int attachmentsNew { get; set; }
+        public int @new { get; set; }
+        public bool pinned { get; set; }
+        public string _id { get; set; }
+    }
+
+    public class MessageResponse
+    {
+        public int err { get; set; }
+        public object errmsg { get; set; }
+        public List<MessageResponseData> data { get; set; }
+    }
+
     public enum SortBy
     {
         ID = 0,
@@ -201,7 +261,7 @@ namespace TarkovBot
         public List<object> builds { get; set; }
     }
 
-    public class SellResponse
+    public class Response
     {
         public int err { get; set; }
         public string errmsg { get; set; }
@@ -215,14 +275,17 @@ namespace TarkovBot
         InventoryFull,
         ProfileLocked,
         NotEnoughMoney,
-        OtherError
+        OtherError,
+        BackendError
     }
 
     public enum SellStatus
     {
         Success,
+        NoMoneyForTax,
         NoAvailableOffer,
-        OtherErr
+        OtherErr,
+        BackendError
     }
 
 }
